@@ -942,11 +942,11 @@ void display_box_msg_commande(display_item_t* box, void_func_t commande_box_func
 void AfficheYesNo(void);
 void DO_YESNOBIS(void);
 u8 confirmation_msg(u8 which_message);
-void SYNCHRO_LOOP_PALETTE(void* func);
-void apparition_prg(void);
-void fondu_prg(void);
-void change_couleur_prg(void);
-void FonduOption(s16 x, s16 y, s16 w, s16 h, u8 a5);
+void SYNCHRO_LOOP_PALETTE(synchro_loop_palette_func_t func);
+s16 apparition_prg(u32 a1);
+s16 fondu_prg(u32 a1);
+s16 change_couleur_prg(void);
+void FonduOption(s16 x, s16 y, s16 w, s16 h, u8 mode);
 s16 FonduPixel_prg(u32 a1);
 void FonduPixel(s16 x, s16 y, s16 w, s16 h);
 

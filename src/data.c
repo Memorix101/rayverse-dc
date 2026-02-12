@@ -3238,6 +3238,7 @@ s32 dword_E0D14; //E0D14
 obj_t wldobj[100]; //E0D18
 u8 sp_y; //E40A9
 
+rgb_palette_t rvb_E40AC; //E40AC
 rgb_palette_t menu_rvb; //E43AC (?)
 rgb_palette_t rvb_options_in_game; //E46AC (?)
 rgb_palette_t rvb_menu_save; //E49AC (?)
