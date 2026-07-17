@@ -1,3 +1,10 @@
+// Music backend on the Dreamcast: 0 = stream the .ogg files from the data track through
+// kos-ports' Tremor decoder (thread-based, integer math), 1 = Red Book CDDA played by the
+// GD-ROM drive (needs the audio tracks on the disc, see tools/make_cdi.sh MUSIC=cdda).
+#ifndef DC_MUSIC_CDDA
+#define DC_MUSIC_CDDA 0
+#endif
+
 #ifdef _WIN32
 // Headers specific to Windows
 #include <malloc.h>
@@ -6,6 +13,16 @@
 #include <dsound.h>
 #include <GL/gl.h>
 #include <GL/glu.h>
+#elif defined(_arch_dreamcast)
+// Headers specific to the Sega Dreamcast (KallistiOS)
+#include <kos.h>
+#include <dc/sound/stream.h>
+#include <alloca.h>
+#if !DC_MUSIC_CDDA
+// Integer Vorbis decoder from kos-ports; libtremor doesn't install into the shared
+// kos-ports include dir, so Makefile.dc adds $(KOS_PORTS)/libtremor/inst/include.
+#include <sndoggvorbis.h>
+#endif
 #else
 // Headers specific to Linux / macOS
 #include <SDL.h>
@@ -59,6 +76,12 @@
 #include "win32_opengl.c"
 #include "win32_sound.c"
 #include "win32_main.c"
+#elif defined(_arch_dreamcast)
+// Source files specific to the Sega Dreamcast
+#include "dc_video.c"
+#include "dc_sound.c"
+#include "dc_vmu.c"
+#include "dc_main.c"
 #else
 // Source files specific to Linux / macOS
 #include "linux_opengl.c"

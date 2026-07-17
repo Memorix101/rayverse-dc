@@ -735,7 +735,7 @@ void INIT_AFFICHE_ECRAN_SAVE(void) {
 void SAISIE_NOM(void) {
     TestCompteur();
     if (!fichier_existant && action != 1) {
-        *(u32*)(save_ray[positiony-1]) = *(u32*)"aaa";
+        memcpy(save_ray[positiony-1], "aaa", 4); // avoid unaligned u32 store on SH-4
         fichier_existant = 1;
     }
     if (affiche_bon_ecran) {

@@ -3,21 +3,28 @@ Work-in-progress modern port of Rayman 1 for PC (version 1.21), based on the dis
 
 The aim is to provide a drop-in replacement for the original executable RAYMAN.EXE that works on modern platforms (including Windows, Linux and macOS).
 
+It's recommended to use [Rayman Forever from GOG](https://www.gog.com/en/game/rayman_forever)
+
 ## Build instructions
 
-### Windows
-For modern Windows platforms, you can build Rayverse using CMake in combination with your preferred toolchain, either MinGW-w64 or MSVC (e.g. using Visual Studio).
+### Dreamcast
+Requires the [KallistiOS](https://kos-docs.dreamcast.wiki/) toolchain with the
+`libtremor` kos-port. Put the Rayman 1 (PC v1.21) data files into `data/`, then:
 
-To build with Windows 9x compatibility, you can use Visual C++ 6.0 with the project file `rayverse.dsp`.
+```
+source /opt/toolchains/dc/kos/environ.sh
+make -f Makefile.dc          # builds rayverse.elf (for dcload / Flycast ELF boot)
+tools/make_cdi.sh            # builds a bootable rayverse.cdi (data + music)
+```
 
-### Linux / macOS
-The following dependencies are required to be installed: SDL2 (on Linux and macOS), GLEW (Linux only).
+Useful `make_cdi.sh` variants:
 ```
-mkdir build && cd build
-cmake .. && cd ..
-cmake --build build
-./rayverse
+PAD=0 tools/make_cdi.sh      # smaller image for emulator/SD use (do NOT burn)
+MUSIC=cdda tools/make_cdi.sh # Red Book audio tracks instead of Tremor-decoded OGGs
+MUSIC=none tools/make_cdi.sh # no music (fast test builds)
 ```
+
+Saves go to the VMU in slot A1.
 
 ## Special thanks
 

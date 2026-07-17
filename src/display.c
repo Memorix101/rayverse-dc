@@ -871,7 +871,7 @@ void DEPART_LEVEL(void) {
 //36B0C
 void REMOVE_FICHIER(void) {
     char filename[512];
-    snprintf(filename, 512, "RAYMAN%d.SAV", fichier_selectionne);
+    snprintf(filename, 512, SAVE_DIR PATH_SEP "RAYMAN%d.SAV", fichier_selectionne);
     remove(filename);
 }
 

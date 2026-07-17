@@ -58,6 +58,17 @@ typedef long long s64;
 #define PATH_SEP "/"
 #endif
 
+// Where to look for the game's data files and where to put save games.
+// On the Dreamcast, data files live on the disc (KOS mounts the CD filesystem at /cd)
+// and saves go to the VMU in slot A1.
+#ifdef _arch_dreamcast
+#define DATA_DIR "/cd/data"
+#define SAVE_DIR "/vmu/a1"
+#else
+#define DATA_DIR "data"
+#define SAVE_DIR "."
+#endif
+
 static inline void fatal_error(void) {
 	abort();
 }

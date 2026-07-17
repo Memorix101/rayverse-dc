@@ -170,7 +170,8 @@ s16 KeyOn(u8 bank, u8 prog, u8 tone, u8 note, u8 volume, u8 pan) {
         snd.size = bnk_header->size;
         snd.bytes_per_sample = 1;
         snd.sample_count = snd.size;
-        snd.bnk_field_C = bnk_header->field_C;
+        snd.loop_start = bnk_header->field_8;
+        snd.loop_end = bnk_header->field_C;
         snd.sample_rate = sample_rate;
         snd.position = 0.0;
         snd.volume = MIN(1.0f, (float)volume / 50.0f);
@@ -180,6 +181,8 @@ s16 KeyOn(u8 bank, u8 prog, u8 tone, u8 note, u8 volume, u8 pan) {
         snd.offset = bnk_header->offset;
         snd.size = bnk_header->size;
         snd.sample_count = snd.size;
+        snd.loop_start = bnk_header->field_8;
+        snd.loop_end = bnk_header->field_C;
         snd.sample_rate = sample_rate;
         snd.bytes_per_sample = 1;
         snd.position = 0.0;

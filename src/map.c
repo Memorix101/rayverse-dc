@@ -27,10 +27,12 @@ void construct_MAP(mem_t* mem, big_map_t* big_map, void* map_blocks) {
         s32 texture_offset = block_add[big_map->map[i].texture_id];
         big_map->tile_texture_offsets[i] = big_map->map_blocks + texture_offset;
         u32 v11;
+        // memcpy instead of a u32 deref: the offset comes from the level data and is not
+        // guaranteed to be 4-byte aligned (the SH-4 traps on unaligned reads)
         if (texture_offset > 288 * nb_blocks_plein) {
-            v11 = *(u32*)(big_map->tile_texture_offsets[i] + 512);
+            memcpy(&v11, big_map->tile_texture_offsets[i] + 512, sizeof(v11));
         } else {
-            v11 = *(u32*)(big_map->tile_texture_offsets[i] + 256);
+            memcpy(&v11, big_map->tile_texture_offsets[i] + 256, sizeof(v11));
         }
         u8 transparency;
         if (v11 == 0xAAAAAAAA) {

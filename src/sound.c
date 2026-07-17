@@ -53,10 +53,17 @@ void stop_ogg(ogg_t* ogg) {
 }
 
 void play_cd_track(s32 track_number, bool looping) {
+#ifdef _arch_dreamcast
+	// Tremor thread or GD-ROM CDDA, depending on DC_MUSIC_CDDA (see dc_sound.c).
+	dc_music_play(track_number, looping);
+	is_ogg_playing = true;
+	MusicCdActive = true;
+#else
 	stop_ogg(&ogg_cd_track);
 	ogg_cd_track = open_cd_vorbis(track_number, looping);
 	is_ogg_playing = true;
 	MusicCdActive = true;
+#endif
 }
 
 //float volume = 0.5f;
@@ -166,17 +173,36 @@ void game_get_sound_samples(game_sound_buffer_t* output_buffer) {
         // Get a pointer to the start of the output buffer for this frame
         s16* dest = output_buffer->samples;
 
+        // The BNK sample header may define a loop window [loop_start, loop_end).
+        // We stop reading one sample early (interpolation needs source_index + 1).
+        s32 end_index = voice->sample_count;
+        bool looping = (voice->loop_end > 0 && voice->loop_end <= voice->sample_count &&
+                        voice->loop_end - 1 > voice->loop_start);
+        if (looping && voice->loop_end < end_index) {
+            end_index = voice->loop_end;
+        }
+
         // Loop through the number of samples we need to generate for this frame
         for (s32 j = 0; j < output_buffer->sample_count; ++j) {
 
             // 1. Find the current position and check boundaries
             s32 source_index = (s32)voice->position;
 
-            // Stop if we've read past the end of the source data.
+            // Reaching the end either wraps back to the loop start or stops the voice.
             // We need source_index and source_index + 1 for interpolation, so we check against size - 1.
-            if (source_index >= voice->sample_count - 1) {
-                voice->is_playing = false;
-                break; // Stop processing this voice for this frame
+            if (source_index >= end_index - 1) {
+                if (looping) {
+                    do {
+                        voice->position -= (float)(end_index - 1 - voice->loop_start);
+                    } while (voice->position >= (float)(end_index - 1));
+                    if (voice->position < 0.0f) {
+                        voice->position = (float)voice->loop_start;
+                    }
+                    source_index = (s32)voice->position;
+                } else {
+                    voice->is_playing = false;
+                    break; // Stop processing this voice for this frame
+                }
             }
 
             // 2. Get samples for interpolation
@@ -341,13 +367,13 @@ s32 get_pile_obj(s16 obj_id) {
 
 //71EF4
 s32 get_voice_obj(s32 obj_id) {
+    // NOTE: fixed a decompilation bug where cur_voice was never advanced,
+    // so only slot 0 was ever checked (cf. FUN_80166724 in the PS1 decomp)
     voice_t* cur_voice = voice_table;
     s32 index = 0;
-
-    if (voice_table[0].obj != obj_id) {
-        do {
-            ++index;
-        } while (index < COUNT(voice_table) && cur_voice->obj != obj_id);
+    while (index < COUNT(voice_table) && cur_voice->obj != obj_id) {
+        ++cur_voice;
+        ++index;
     }
     if (index == COUNT(voice_table)) {
         return -1;
@@ -360,11 +386,9 @@ s32 get_voice_obj(s32 obj_id) {
 s32 get_voice_snd(s32 snd) {
     voice_t* cur_voice = voice_table;
     s32 index = 0;
-
-    if (voice_table[0].snd != snd) {
-        do {
-            ++index;
-        } while (index < COUNT(voice_table) && cur_voice->snd != snd);
+    while (index < COUNT(voice_table) && cur_voice->snd != snd) {
+        ++cur_voice;
+        ++index;
     }
     if (index == COUNT(voice_table)) {
         return -1;
@@ -424,13 +448,13 @@ void nettoie_pile_snd(void) {
 
 //721C4
 void erase_voice_table(s32 obj_id) {
+    // NOTE: fixed a decompilation bug where cur_voice was never advanced,
+    // so only slot 0 was ever erased
     voice_t* cur_voice = voice_table;
     s32 result = 0;
-
-    if (voice_table[0].obj != obj_id) {
-        do {
-            ++result;
-        } while (result < COUNT(voice_table) && cur_voice->obj != obj_id);
+    while (result < COUNT(voice_table) && cur_voice->obj != obj_id) {
+        ++cur_voice;
+        ++result;
     }
     if (result != COUNT(voice_table)) {
         cur_voice->obj = -2;
@@ -611,11 +635,9 @@ void PlaySnd(s16 snd, s16 obj_id) {
                     }
                 }
             } else {
-                // NOTE: I don't yet know what causes the sound to be emitted in this code path.
-                // So, I added this for now (delete again when it's figured out).
-                KeyOn(bank_to_use[snd], prog, tone, note, Volume_Snd * vol_snd * hard_sound_table[snd].volume >> 14, pan_snd);
-//                printf("Debug: snd %d, prog %d, tone %d, note %d, vol %d, pan %d\n", snd, prog, tone, note, Volume_Snd * vol_snd * hard_sound_table[snd].volume >> 14, pan_snd);
-
+                // Deferred sound: it gets queued here and fired later by setvol() once
+                // end_time comes up (this was the previously unknown emission path; the
+                // temporary immediate KeyOn workaround made these sounds play twice).
                 nettoie_pile_snd();
                 erase_pile_snd(obj_id);
                 pile_snd[pt_pile_snd].obj = obj_id;
@@ -677,6 +699,7 @@ void PlaySnd_old(s16 sound_id) {
                 voice_table[voice_index].obj = -2;
                 voice_table[voice_index].vol = 64;
                 voice_table[voice_index].pan = 64;
+                voice_table[voice_index].snd = sound_id; // keep the bookkeeping valid for manage_snd()
                 if (sound_table[sound_id] & 0x10) {
                     voice_is_working[voice_index] = 1;
                 }
@@ -687,22 +710,149 @@ void PlaySnd_old(s16 sound_id) {
 
 //72A1C
 void setvol(s16 obj_id) {
-    print_once("Not implemented: setvol"); //stub
+    // Ported from setvol() in the PS1 decomp. Two jobs, done per object per frame:
+    // 1. Fire sounds queued in pile_snd (PlaySnd defers sounds with frame_snd[snd] != 0)
+    //    once their end_time comes up, optionally chaining into a follow-up sound (snd_bis).
+    // 2. Track the distance volume of the object's live voice; for managed looping voices
+    //    (voice_is_working) the mixer volume is updated live, which also restores them
+    //    after mute_snd().
+    if (!CarteSonAutorisee) {
+        return;
+    }
+    if (ray.scale != 0 && obj_id == reduced_rayman_id) {
+        obj_id = -1;
+    }
+    if (obj_id == rayman_obj_id) {
+        obj_id = -1;
+    }
+
+    s32 pile_index = get_pile_obj(obj_id);
+    if (pile_index != -1) {
+        pile_snd_t* pile = pile_snd + pile_index;
+        u8 vol_snd;
+        if (obj_id == -1 || (sound_table[pile->snd] & 3) != 3) {
+            vol_snd = 127;
+        } else {
+            vol_snd = get_vol_snd(level.objects + obj_id);
+        }
+        pile->field_C = vol_snd;
+        if (pile->end_time == map_time) {
+            s32 voice_id = KeyOn(bank_to_use[pile->snd], pile->prog, pile->tone, pile->note,
+                                 Volume_Snd * vol_snd * pile->vol >> 14, pile->pan);
+            if (voice_id != -1) {
+                erase_voice_table(obj_id);
+                voice_table[voice_id].obj = obj_id;
+                voice_table[voice_id].vol = vol_snd;
+                voice_table[voice_id].pan = pile->pan;
+                voice_table[voice_id].snd = pile->snd;
+                if ((sound_table[pile->snd] & 0x10) != 0) {
+                    voice_is_working[voice_id] = 1;
+                }
+            }
+            if (pile->field_14 != 0) {
+                // Chain into the follow-up sound; the delay comes from the sound just fired.
+                pile->end_time = map_time + frame_snd_bis[pile->snd];
+                pile->snd = snd_bis[pile->snd];
+                pile->prog = hard_sound_table[pile->snd].prog;
+                pile->tone = hard_sound_table[pile->snd].tone;
+                pile->note = hard_sound_table[pile->snd].note;
+                pile->vol = hard_sound_table[pile->snd].volume;
+                pile->field_14 = 0;
+            } else {
+                // Remove the fired entry from the queue
+                for (s32 i = pile_index; i < pt_pile_snd; ++i) {
+                    pile_snd[i] = pile_snd[i+1];
+                }
+                if (pt_pile_snd > 0) {
+                    --pt_pile_snd;
+                }
+            }
+        }
+    }
+
+    s32 voice_id = get_voice_obj(obj_id);
+    if (voice_id != -1) {
+        voice_t* voice = voice_table + voice_id;
+        u8 vol_snd;
+        if (obj_id == -1 || voice->snd == 204) {
+            vol_snd = 127;
+        } else {
+            vol_snd = get_vol_snd(level.objects + obj_id);
+        }
+        voice->vol = vol_snd;
+        if (voice_is_working[voice_id]) {
+            KeyVol(voice_id, Volume_Snd * vol_snd * hard_sound_table[voice->snd].volume >> 14, voice->pan);
+        }
+    }
 }
 
 //72E74
 void setpan(s16 obj_id) {
-    print_once("Not implemented: setpan"); //stub
+    // Ported from setpan() in the PS1 decomp: track the stereo position of the object's
+    // voice (or its queued pile_snd entry, if the sound hasn't fired yet).
+    if (!CarteSonAutorisee) {
+        return;
+    }
+    if (ray.scale != 0 && obj_id == reduced_rayman_id) {
+        obj_id = -1;
+    }
+    u8 pan;
+    if (obj_id == -1) {
+        pan = get_pan_snd(&ray);
+    } else {
+        pan = get_pan_snd(level.objects + obj_id);
+    }
+    s32 voice_id = get_voice_obj(obj_id);
+    if (voice_id != -1) {
+        voice_table[voice_id].pan = pan;
+    } else {
+        s32 pile_index = get_pile_obj(obj_id);
+        if (pile_index != -1) {
+            pile_snd[pile_index].pan = pan;
+        }
+    }
 }
 
 //72F38
 void manage_snd(void) {
-    print_once("Not implemented: manage_snd"); //stub
+    // Stops "managed" looping sounds (sound_table flag 0x10) whose owning object has gone
+    // inactive, and cleans up entries orphaned by erase_voice_table() (obj == -2 without a
+    // KeyOff). Without this, looping samples play forever once their source is gone.
+    // Reimplemented after FUN_80168f48() in the PS1 decomp (called from main_moteur there).
+    for (s32 i = 0; i < COUNT(voice_table); ++i) {
+        voice_t* voice = voice_table + i;
+        s16 snd = voice->snd;
+        if (snd <= 0) {
+            continue;
+        }
+        bool object_gone = (voice->obj > -1 && !level.objects[voice->obj].is_active);
+        bool orphaned = (voice->obj == -2);
+        if ((object_gone || orphaned) && (sound_table[snd] & 0x10) != 0) {
+            KeyOff(i, bank_to_use[snd], hard_sound_table[snd].prog, hard_sound_table[snd].tone, hard_sound_table[snd].note);
+            voice_is_working[i] = 0;
+            for (s32 j = 0; j < COUNT(stk_obj); ++j) {
+                if (stk_obj[j] == voice->obj) {
+                    stk_snd[j] = -1;
+                    break;
+                }
+            }
+            voice->obj = -2;
+            voice->snd = -1;
+        }
+    }
 }
 
 //730DC
 void mute_snd_bouclant(void) {
-    print_once("Not implemented: mute_snd_bouclant"); //stub
+    // Mute the looping voices (they get their volume back through setvol()).
+    // Ported from the PS1 decomp; sounds 2, 6 and 245 are muted explicitly there
+    // in addition to everything flagged as looping.
+    for (s32 i = 0; i < COUNT(voice_table); ++i) {
+        s16 snd = voice_table[i].snd;
+        if (snd == 2 || snd == 6 || snd == 245 || (snd > 0 && (sound_table[snd] & 0x10) != 0)) {
+            KeyVol(i, 0, 0);
+        }
+    }
 }
 
 //73138
@@ -710,7 +860,6 @@ void mute_snd(void) {
     for (s32 i = 0; i < COUNT(voice_table); ++i) {
         KeyVol(i, 0, 0);
     }
-    print_once("Not implemented: mute_snd"); //stub
 }
 
 //73164

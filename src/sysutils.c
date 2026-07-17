@@ -30,7 +30,7 @@ FILE* open_data_file(const char* filename, bool error_is_fatal) {
 	FILE* fp = fopen(filename, "rb");
 	if (!fp) {
 		char data_path[256];
-		snprintf(data_path, 256, "data" PATH_SEP "%s", filename);
+		snprintf(data_path, 256, DATA_DIR PATH_SEP "%s", filename);
 		fp = fopen(data_path, "rb");
 	}
 	if (!fp && error_is_fatal) {
@@ -48,13 +48,19 @@ mem_t* read_entire_file(const char* filename, bool error_is_fatal) {
 	FILE* fp = fopen(filename, "rb");
     if (!fp) {
         char data_path[256];
-        snprintf(data_path, 256, "data" PATH_SEP "%s", filename);
+        snprintf(data_path, 256, DATA_DIR PATH_SEP "%s", filename);
         fp = fopen(data_path, "rb");
     }
 	if (fp) {
-		struct stat st;
-		if (fstat(fileno(fp), &st) == 0) {
-			int filesize = st.st_size;
+		// Determine the file size with fseek/ftell (fstat is not reliable across all KOS filesystems)
+		int filesize = -1;
+		if (fseek(fp, 0, SEEK_END) == 0) {
+			long len = ftell(fp);
+			if (len >= 0 && fseek(fp, 0, SEEK_SET) == 0) {
+				filesize = (int)len;
+			}
+		}
+		{
 			if (filesize > 0) {
 				size_t allocation_size = sizeof(mem_t) + filesize;
 				result = (mem_t*) malloc(allocation_size);
@@ -80,6 +86,25 @@ mem_t* read_entire_file(const char* filename, bool error_is_fatal) {
 		fatal_error();
 	}
 	return result;
+}
+
+// Save files. On the Dreamcast these live on the VMU; KOS's fs_vmu transparently adds the
+// VMS package (header + icon, see dc_vmu.c) on write and strips it again on read, so the
+// code here is the same on all platforms. Note that VMU files are padded to 512-byte
+// blocks, so a loaded save may have trailing padding — the save decoder tolerates that.
+
+mem_t* read_save_file(const char* filename) {
+	return read_entire_file(filename, false);
+}
+
+bool write_save_file(const char* filename, const u8* data, u32 len) {
+	FILE* fp = fopen(filename, "wb");
+	if (!fp) {
+		return false;
+	}
+	bool ok = (fwrite(data, len, 1, fp) == 1);
+	fclose(fp);
+	return ok;
 }
 
 s32 mem_write(void* src, mem_t* mem, size_t bytes_to_write) {

@@ -75,12 +75,19 @@ void start_cd_gameover(void) {
 void stop_cd(void) {
     SetCompteurTrameAudio();
     is_ogg_playing = false;
+#ifdef _arch_dreamcast
+    dc_music_stop();
+#endif
 }
 
 //1D050
 bool cd_playing(void) {
     if (MusicCdActive) {
+#ifdef _arch_dreamcast
+        return dc_music_playing();
+#else
         return is_ogg_playing;
+#endif
     } else {
         return false;
     }

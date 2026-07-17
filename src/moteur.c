@@ -1631,6 +1631,12 @@ void DO_OBJECTS(void) {
         allocate_toons(lidol_source_obj, 7);
         lidol_to_allocate = 0;
     }
+    // Update volume/pan of each active object's sound and fire queued sounds
+    // (this loop exists in the PS1 version and was missing here)
+    for (s32 i = 0; i < actobj.num_active_objects; ++i) {
+        setvol(actobj.objects[i]);
+        setpan(actobj.objects[i]);
+    }
     for (s32 i = 0; i < actobj.num_active_objects; ++i) {
         obj_t* obj = level.objects + actobj.objects[i];
         ot = obj->type;

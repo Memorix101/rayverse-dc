@@ -281,8 +281,8 @@ void sav_set_ALL_WORLD(u8 which_save) {
 // Partly based on https://github.com/RayCarrot/RayCarrot.Rayman/blob/3bf249b64da4254c03fa49a15bb9d5691ddfce66/RayCarrot.Rayman/Encoder/Rayman12PCSaveDataEncoder.cs
 void load_sav(u8 which_save) {
 	char filename[512];
-	snprintf(filename, 512, "RAYMAN%d.SAV", which_save);
-	mem_t* encoded = read_entire_file(filename, false);
+	snprintf(filename, 512, SAVE_DIR PATH_SEP "RAYMAN%d.SAV", which_save);
+	mem_t* encoded = read_save_file(filename);
 	if (encoded) {
 #ifdef NEED_SAV_ENCODE_DECODE_TEST
 		test_sav_encode_decode(encoded);
@@ -588,12 +588,11 @@ void SaveGameOnDisk(u8 which_save) {
 
 
     char filename[512];
-    snprintf(filename, 512, "RAYMAN%d.SAV", which_save);
-    // stub: writing out to a temporary file for encryption
+    snprintf(filename, 512, SAVE_DIR PATH_SEP "RAYMAN%d.SAV", which_save);
 
-    FILE* fp = fopen(filename, "wb");
-    fwrite(encoded->data, encoded->len, 1, fp);
-    fclose(fp);
+    if (!write_save_file(filename, encoded->data, encoded->len)) {
+        printf("Error: couldn't write save file %s\n", filename);
+    }
 
     free(raw);
     free(compressed);
@@ -603,8 +602,8 @@ void SaveGameOnDisk(u8 which_save) {
 //746D0
 bool LoadGameOnDisk(u8 which_save) {
     char save_filename[32];
-    snprintf(save_filename, sizeof(save_filename), "RAYMAN%d.SAV", which_save);
-    mem_t* encoded = read_entire_file(save_filename, false);
+    snprintf(save_filename, sizeof(save_filename), SAVE_DIR PATH_SEP "RAYMAN%d.SAV", which_save);
+    mem_t* encoded = read_save_file(save_filename);
     bool has_error = false;
     if (encoded) {
         u8 checksum = 0;
@@ -651,8 +650,8 @@ bool LoadGameOnDisk(u8 which_save) {
 //749C8
 bool LoadInfoGame(u8 which_save) {
     char save_filename[32];
-    snprintf(save_filename, sizeof(save_filename), "RAYMAN%d.SAV", which_save);
-    mem_t* encoded = read_entire_file(save_filename, false);
+    snprintf(save_filename, sizeof(save_filename), SAVE_DIR PATH_SEP "RAYMAN%d.SAV", which_save);
+    mem_t* encoded = read_save_file(save_filename);
     bool has_error = false;
     if (encoded) {
         u8 checksum = 0;
@@ -701,7 +700,7 @@ bool SaveOptionsOnDisk(void) {
 
 //75268
 bool LoadOptionsOnDisk(void) {
-    mem_t* mem = read_entire_file("RAYMAN.CFG", false);
+    mem_t* mem = read_save_file(SAVE_DIR PATH_SEP "RAYMAN.CFG");
     if (mem) {
         if (mem->len != 0x84) {
             return false;

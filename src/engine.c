@@ -57,8 +57,10 @@ void advance_frame(void) {
     
 	app_state_t* app_state = &global_app_state;
 	game_state_t* game = &app_state->game;
+#ifndef _arch_dreamcast
 	rgb_t clear_color = { 0, 0, 0 };
-	render_clear(app_state->active_surface, clear_color);
+	render_clear(app_state->active_surface, clear_color); // no RGBA surface on the Dreamcast
+#endif
     memcpy(game->prev_frame.memory, game->draw_buffer.memory, game->draw_buffer.memory_size);
 
     // The draw buffer memory source may sometimes be overridden by EffetBufferNormal (we need to allow this).
@@ -67,6 +69,12 @@ void advance_frame(void) {
         game->draw_buffer.memory = draw_buffer;
     }
 
+#ifdef _arch_dreamcast
+    // The PVR backend resolves the palette itself, so we hand it the raw 8-bit buffer
+    // instead of blitting into an RGBA surface first.
+    dc_advance_frame(app_state, game->draw_buffer.memory, &game->draw_palette);
+    game->draw_buffer.memory = saved_memory;
+#else
     surface_blit_palettized_image(&game->draw_buffer, &game->draw_palette, NULL, app_state->active_surface, NULL);
 
     game->draw_buffer.memory = saved_memory;
@@ -75,6 +83,7 @@ void advance_frame(void) {
 	win32_advance_frame(app_state);
 #else
     linux_advance_frame(app_state);
+#endif
 #endif
 
     if (global_app_state.was_client_leftclicked) {

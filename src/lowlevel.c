@@ -64,10 +64,14 @@ void DisplayBufferModeNormal(u8* source, u8* dest) {
 void DrawWldPointPlan2Normal(u8* buffer, s32 x, s32 y) {
     s32 stride = 384;
     u8* pos = buffer + stride * y + x;
-    *(u16*)(pos + 0 * stride + 1) = 0x0C00;
-    *(u32*)(pos + 1 * stride)   = 0x0C0E0A00;
-    *(u32*)(pos + 2 * stride)   = 0x000A0900;
-    *(u16*)(pos + 3 * stride + 1) = 0x0C00;
+    // Written as byte stores: the destination is only byte-aligned, and unaligned u16/u32
+    // stores raise an exception on the SH-4. (Values match the original little-endian words.)
+    pos[0 * stride + 1] = 0x00; pos[0 * stride + 2] = 0x0C;
+    pos[1 * stride + 0] = 0x00; pos[1 * stride + 1] = 0x0A;
+    pos[1 * stride + 2] = 0x0E; pos[1 * stride + 3] = 0x0C;
+    pos[2 * stride + 0] = 0x00; pos[2 * stride + 1] = 0x09;
+    pos[2 * stride + 2] = 0x0A; pos[2 * stride + 3] = 0x00;
+    pos[3 * stride + 1] = 0x00; pos[3 * stride + 2] = 0x0C;
 }
 
 //14AEF

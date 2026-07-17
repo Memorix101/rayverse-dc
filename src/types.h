@@ -67,7 +67,12 @@ typedef struct snd_t {
     s32 offset;
     s32 size;
     s32 sample_count;
-    s32 bnk_field_C;
+    // Loop points from the BNK sample header (field_8/field_C), in samples.
+    // loop_end == 0 means the sample doesn't loop; otherwise the mixer wraps
+    // from loop_end back to loop_start. (Some entries have loop_end == size,
+    // i.e. the whole sample loops.)
+    s32 loop_start;
+    s32 loop_end;
     float position;
     float volume;
     s32 sample_rate;
@@ -111,6 +116,11 @@ typedef struct win32_sound_output_t {
 	IDirectSoundBuffer* secondary_buffer;
 	bool is_valid;
 } win32_sound_output_t;
+#elif defined(_arch_dreamcast)
+typedef struct dc_sound_output_t {
+    u32 samples_per_second;
+    snd_stream_hnd_t stream;
+} dc_sound_output_t;
 #else
 typedef struct sdl_sound_output_t {
     u32 samples_per_second;
@@ -141,6 +151,10 @@ typedef struct win32_state_t {
     HCURSOR cursor;
     win32_sound_output_t sound_output;
 } win32_state_t;
+#elif defined(_arch_dreamcast)
+typedef struct dc_state_t {
+    dc_sound_output_t sound_output;
+} dc_state_t;
 #else
 typedef struct sdl_state_t {
     SDL_Window* window;
@@ -148,10 +162,12 @@ typedef struct sdl_state_t {
 } sdl_state_t;
 #endif
 
+#ifndef _arch_dreamcast
 typedef struct opengl_state_t {
 	GLuint screen_texture;
 	GLint max_texture_size;
 } opengl_state_t;
+#endif
 
 
 typedef struct surface_t {
@@ -168,10 +184,14 @@ typedef struct surface_t {
 typedef struct app_state_t {
 #ifdef _WIN32
 	win32_state_t win32;
+#elif defined(_arch_dreamcast)
+	dc_state_t dc;
 #else
     sdl_state_t sdl;
 #endif
+#ifndef _arch_dreamcast
 	opengl_state_t opengl;
+#endif
 	surface_t offscreen_surface;
 	surface_t game_surface;
 	surface_t* active_surface;
